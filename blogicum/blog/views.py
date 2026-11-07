@@ -1,13 +1,23 @@
 from django.shortcuts import render, get_object_or_404
 from .models import Post, Category, User
-from .forms import ProfileEditForm
+from .forms import ProfileEditForm, PostForm
 from django.core.paginator import Paginator
-from django.views.generic import CreateView, UpdateView
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
+from django.contrib.auth.mixins import (
+    LoginRequiredMixin,
+    UserPassesTestMixin,
+)
 
 
 POSTS_LIMIT = 5
+
+
+class OnlyAuthorMixin(UserPassesTestMixin):
+
+    def test_func(self):
+        object = self.get_object()
+        return object.author == self.request.user
 
 
 def index(request):
@@ -67,10 +77,6 @@ def profile_user(request, username_slug):
     return render(request, template_name, context)
 
 
-class PostCreateView(CreateView):
-    pass
-
-
 class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     model = User
     form_class = ProfileEditForm
@@ -78,6 +84,37 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_object(self, queryset=None):
         return self.request.user
+
+    def get_success_url(self):
+        return reverse_lazy(
+            'blog:profile',
+            kwargs={'username_slug': self.request.user.username}
+        )
+
+
+class PostCreateView(CreateView):
+    model = Post
+    form_class = PostForm
+    template_name = 'blog/create.html'
+
+    def form_valid(self, form):
+        form.instance.author = self.request.user
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy(
+            'blog:profile',
+            kwargs={'username_slug': self.request.user.username}
+        )
+
+
+class PostUpdateView(OnlyAuthorMixin, LoginRequiredMixin, UpdateView):
+    model = Post
+    form_class = PostForm
+
+
+class PostDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
+    model = Post
 
     def get_success_url(self):
         return reverse_lazy(
