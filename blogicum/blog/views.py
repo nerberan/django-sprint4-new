@@ -1,7 +1,10 @@
 from django.shortcuts import render, get_object_or_404
 from .models import Post, Category, User
+from .forms import ProfileEditForm
 from django.core.paginator import Paginator
 from django.views.generic import CreateView, UpdateView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.urls import reverse_lazy
 
 
 POSTS_LIMIT = 5
@@ -68,5 +71,16 @@ class PostCreateView(CreateView):
     pass
 
 
-class ProfileUpdateView(UpdateView):
-    pass
+class ProfileUpdateView(LoginRequiredMixin, UpdateView):
+    model = User
+    form_class = ProfileEditForm
+    template_name = 'blog/user.html'
+
+    def get_object(self, queryset=None):
+        return self.request.user
+
+    def get_success_url(self):
+        return reverse_lazy(
+            'blog:profile',
+            kwargs={'username_slug': self.request.user.username}
+        )
