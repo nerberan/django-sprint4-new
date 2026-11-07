@@ -1,5 +1,7 @@
 from django.shortcuts import render, get_object_or_404
-from .models import Post, Category
+from .models import Post, Category, User
+from django.core.paginator import Paginator
+from django.views.generic import CreateView, UpdateView
 
 
 POSTS_LIMIT = 5
@@ -46,3 +48,25 @@ def category_posts(request, category_slug):
         'post_list': post_list,
     }
     return render(request, template_name, context)
+
+
+def profile_user(request, username_slug):
+    template_name = 'blog/profile.html'
+    profile = get_object_or_404(User, username=username_slug)
+    posts = profile.posts.select_related('category', 'location', 'author')
+    paginator = Paginator(posts, POSTS_LIMIT)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    context = {
+        'profile': profile,
+        'page_obj': page_obj,
+    }
+    return render(request, template_name, context)
+
+
+class PostCreateView(CreateView):
+    pass
+
+
+class ProfileUpdateView(UpdateView):
+    pass
