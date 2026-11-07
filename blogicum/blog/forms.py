@@ -1,5 +1,5 @@
 from django import forms
-from .models import User, Post
+from .models import User, Post, Comment
 
 
 class ProfileEditForm(forms.ModelForm):
@@ -25,3 +25,10 @@ class PostForm(forms.ModelForm):
                 attrs={"type": "date"},
             ),
         }
+
+
+class CommentForm(forms.ModelForm):
+
+    class Meta:
+        model = Comment
+        fields = ('text',)

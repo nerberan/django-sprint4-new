@@ -1,16 +1,32 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from .models import Post, Category, User
-from .forms import ProfileEditForm, PostForm
+from .forms import ProfileEditForm, PostForm, CommentForm
 from django.core.paginator import Paginator
-from django.views.generic import CreateView, UpdateView, DeleteView
+from django.views.generic import CreateView, UpdateView, DeleteView, DetailView
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import (
     LoginRequiredMixin,
     UserPassesTestMixin,
 )
+from django.db.models import Q
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 
 
 POSTS_LIMIT = 5
+
+
+@login_required
+@require_POST
+def add_comment(request, pk):
+    post = get_object_or_404(Post, pk=pk)
+    form = CommentForm(request.POST)
+    if form.is_valid():
+        comment = form.save(commit=False)
+        comment.author = request.user
+        comment.birthday = post
+        comment.save()
+    return redirect('birthday:detail', pk=pk)
 
 
 class OnlyAuthorMixin(UserPassesTestMixin):
@@ -121,3 +137,18 @@ class PostDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
             'blog:profile',
             kwargs={'username_slug': self.request.user.username}
         )
+
+
+class PostDetailView(DetailView):
+    model = Post
+    template_name = 'blog/detail.html'
+    context_object_name = 'post'
+    pk_url_kwarg = 'id'
+
+    def get_queryset(self):
+        qs = Post.objects.select_related('category', 'location', 'author')
+        if self.request.user.is_authenticated:
+            return qs.filter(
+                Q(is_published=True) | Q(author=self.request.user)
+            )
+        return qs.filter(is_published=True)

@@ -13,7 +13,7 @@ urlpatterns = [
     ),
     path(
         'posts/<int:id>/',
-        views.post_detail,
+        views.PostDetailView.as_view(),
         name='post_detail'
     ),
     path(
@@ -34,11 +34,21 @@ urlpatterns = [
     path(
         'posts/<int:id>/edit/',
         views.PostUpdateView.as_view(),
-        name='post_edit'
+        name='edit_post'
     ),
     path(
         'posts/<int:id>/delete/',
         views.PostDeleteView.as_view(),
-        name='post_delete'
+        name='delete_post'
+    ),
+    path(
+        'posts/<int:post_id>/edit_comment/<int:comment_id>',
+        views.add_comment,
+        name='edit_comment'
+    ),
+    path(
+        'posts/<int:post_id>/delete_comment/<int:comment_id>',
+        views.delete_comment,
+        name='delete_comment'
     ),
 ]
