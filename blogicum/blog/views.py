@@ -184,14 +184,25 @@ class PostDeleteView(LoginRequiredMixin, OnlyAuthorMixin, DeleteView):
 @login_required
 @require_POST
 def add_comment(request, post_id):
-    post = get_object_or_404(Post, pk=post_id)
+    post = get_object_or_404(
+        Post.objects.with_comments_count().with_related(),
+        pk=post_id,
+    )
     form = CommentForm(request.POST)
     if form.is_valid():
         comment = form.save(commit=False)
         comment.author = request.user
         comment.post = post
         comment.save()
-    return redirect('blog:post_detail', id=post.id)
+        return redirect('blog:post_detail', id=post.id)
+
+    comments = post.comments.select_related('author').order_by('created_at')
+    context = {
+        'post': post,
+        'comments': comments,
+        'form': form,
+    }
+    return render(request, 'blog/detail.html', context)
 
 
 @login_required
