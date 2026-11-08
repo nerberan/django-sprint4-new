@@ -8,25 +8,12 @@ from django.contrib.auth.mixins import (
     LoginRequiredMixin,
     UserPassesTestMixin,
 )
-from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
+from django.http import Http404
 
 
 POSTS_LIMIT = 5
-
-
-@login_required
-@require_POST
-def add_comment(request, pk):
-    post = get_object_or_404(Post, pk=pk)
-    form = CommentForm(request.POST)
-    if form.is_valid():
-        comment = form.save(commit=False)
-        comment.author = request.user
-        comment.birthday = post
-        comment.save()
-    return redirect('birthday:detail', pk=pk)
 
 
 class OnlyAuthorMixin(UserPassesTestMixin):
@@ -37,6 +24,8 @@ class OnlyAuthorMixin(UserPassesTestMixin):
 
 
 def index(request):
+    # Выводит на главную страницу список публикаций
+
     template_name = 'blog/index.html'
 
     post_list = (
@@ -50,16 +39,32 @@ def index(request):
 
 
 def post_detail(request, id):
+    # Выводит отдельую страницу публикации
+
     template_name = 'blog/detail.html'
 
     post = get_object_or_404(
-        Post.objects.published().select_related('category'), pk=id)
+        Post.objects.select_related('category', 'location', 'author'),
+        pk=id,
+    )
 
-    context = {'post': post}
+    is_author = request.user.is_authenticated and post.author == request.user
+    if not is_author and not post.is_published:
+        raise Http404
+
+    comments = post.comments.select_related('author').order_by('created_at')
+
+    context = {
+        'post': post,
+        'comments': comments,
+        'form': CommentForm(),
+    }
     return render(request, template_name, context)
 
 
 def category_posts(request, category_slug):
+    # Выводит список публикаций по категориям
+
     template_name = 'blog/category.html'
 
     category = get_object_or_404(
@@ -79,7 +84,11 @@ def category_posts(request, category_slug):
     return render(request, template_name, context)
 
 
+# ----------Профиль (Шаг 1). Начало----------
+
+
 def profile_user(request, username_slug):
+
     template_name = 'blog/profile.html'
     profile = get_object_or_404(User, username=username_slug)
     posts = profile.posts.select_related('category', 'location', 'author')
@@ -108,6 +117,12 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         )
 
 
+# ----------Профиль (Шаг 1). Конец----------
+
+
+# ----------Публикации (Шаг 2). Начало----------
+
+
 class PostCreateView(CreateView):
     model = Post
     form_class = PostForm
@@ -127,6 +142,11 @@ class PostCreateView(CreateView):
 class PostUpdateView(OnlyAuthorMixin, LoginRequiredMixin, UpdateView):
     model = Post
     form_class = PostForm
+    template_name = 'blog/create.html'
+    pk_url_kwarg = 'id'
+
+    def get_success_url(self):
+        return reverse_lazy('blog:post_detail', kwargs={'id': self.object.id})
 
 
 class PostDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
@@ -139,16 +159,35 @@ class PostDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
         )
 
 
-class PostDetailView(DetailView):
-    model = Post
-    template_name = 'blog/detail.html'
-    context_object_name = 'post'
-    pk_url_kwarg = 'id'
+# ----------Публикации (Шаг 2). Конец----------
 
-    def get_queryset(self):
-        qs = Post.objects.select_related('category', 'location', 'author')
-        if self.request.user.is_authenticated:
-            return qs.filter(
-                Q(is_published=True) | Q(author=self.request.user)
-            )
-        return qs.filter(is_published=True)
+
+# ----------Коментарии (Шаг 4). Начало----------
+
+
+@login_required
+@require_POST
+def add_comment(request, pk):
+    post = get_object_or_404(Post, pk=pk)
+    form = CommentForm(request.POST)
+    if form.is_valid():
+        comment = form.save(commit=False)
+        comment.author = request.user
+        comment.post = post
+        comment.save()
+    return redirect('post:detail', pk=pk)
+
+
+@login_required
+@require_POST
+def delete_comment(request, pk):
+    pass
+
+
+@login_required
+@require_POST
+def edit_comment(request, pk):
+    pass
+
+
+# ----------Коментарии (Шаг 4). Конец----------

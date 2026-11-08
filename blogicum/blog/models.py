@@ -86,7 +86,7 @@ class Post(BaseModel):
     )
     image = models.ImageField(
         'Фото',
-        upload_to='posts_images/',
+        upload_to='post_images/',
         blank=True,
     )
 
