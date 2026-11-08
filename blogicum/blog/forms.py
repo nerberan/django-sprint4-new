@@ -1,5 +1,13 @@
 from django import forms
 from .models import User, Post, Comment
+from blog.moderation import is_toxic
+from django.core.exceptions import ValidationError
+
+
+MODERATION_ERROR = (
+    'Комментарий не проходит модерацию. '
+    'Пожалуйста, сформулируйте мысль корректнее.'
+)
 
 
 class ProfileEditForm(forms.ModelForm):
@@ -32,3 +40,9 @@ class CommentForm(forms.ModelForm):
     class Meta:
         model = Comment
         fields = ('text',)
+
+    def clean_text(self):
+        text = self.cleaned_data['text']
+        if is_toxic(text):
+            raise ValidationError(MODERATION_ERROR)
+        return text
