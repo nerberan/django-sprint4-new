@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Post, Category, User
+from .models import Post, Category, User, Comment
 from .forms import ProfileEditForm, PostForm, CommentForm
 from django.core.paginator import Paginator
 from django.views.generic import CreateView, UpdateView, DeleteView
@@ -12,6 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.http import Http404
 from django.utils import timezone
+from django.core.exceptions import PermissionDenied
 
 
 POSTS_BY_PAGE = 10
@@ -22,6 +23,15 @@ class OnlyAuthorMixin(UserPassesTestMixin):
     def test_func(self):
         object = self.get_object()
         return object.author == self.request.user
+
+
+def get_comment_or_404(post_id, comment_id):
+    """Возвращает комментарий, проверяя, что он относится к посту из URL."""
+    return get_object_or_404(
+        Comment.objects.select_related('author', 'post'),
+        pk=comment_id,
+        post_id=post_id,
+    )
 
 
 # ----------Правила показа публикаций (Шаг 3). Начало----------
@@ -173,27 +183,48 @@ class PostDeleteView(LoginRequiredMixin, OnlyAuthorMixin, DeleteView):
 
 @login_required
 @require_POST
-def add_comment(request, pk):
-    post = get_object_or_404(Post, pk=pk)
+def add_comment(request, post_id):
+    post = get_object_or_404(Post, pk=post_id)
     form = CommentForm(request.POST)
     if form.is_valid():
         comment = form.save(commit=False)
         comment.author = request.user
         comment.post = post
         comment.save()
-    return redirect('post:detail', pk=pk)
+    return redirect('blog:post_detail', id=post.id)
 
 
 @login_required
-@require_POST
-def delete_comment(request, pk):
-    pass
+def edit_comment(request, post_id, comment_id):
+    template_name = 'blog/comment.html'
+    comment = get_comment_or_404(post_id, comment_id)
+
+    if comment.author != request.user:
+        raise PermissionDenied
+
+    form = CommentForm(request.POST or None, instance=comment)
+    if form.is_valid():
+        form.save()
+        return redirect('blog:post_detail', id=post_id)
+
+    context = {'form': form, 'comment': comment}
+    return render(request, template_name, context)
 
 
 @login_required
-@require_POST
-def edit_comment(request, pk):
-    pass
+def delete_comment(request, post_id, comment_id):
+    template_name = 'blog/comment.html'
+    comment = get_comment_or_404(post_id, comment_id)
+
+    if comment.author != request.user:
+        raise PermissionDenied
+
+    if request.method == 'POST':
+        comment.delete()
+        return redirect('blog:post_detail', id=post_id)
+
+    context = {'comment': comment}
+    return render(request, template_name, context)
 
 
 # ----------Коментарии (Шаг 4). Конец----------
