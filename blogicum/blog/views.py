@@ -21,8 +21,15 @@ POSTS_BY_PAGE = 10
 class OnlyAuthorMixin(UserPassesTestMixin):
 
     def test_func(self):
-        object = self.get_object()
-        return object.author == self.request.user
+        obj = self.get_object()
+        return (
+            self.request.user.is_authenticated
+            and obj.author == self.request.user
+        )
+
+    def handle_no_permission(self):
+        obj = self.get_object()
+        return redirect('blog:post_detail', id=obj.id)
 
 
 def get_comment_or_404(post_id, comment_id):
@@ -132,7 +139,7 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 # ----------Публикации (Шаг 2). Начало----------
 
 
-class PostCreateView(CreateView):
+class PostCreateView(LoginRequiredMixin, CreateView):
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
@@ -148,17 +155,19 @@ class PostCreateView(CreateView):
         )
 
 
-class PostUpdateView(OnlyAuthorMixin, LoginRequiredMixin, UpdateView):
+class PostUpdateView(OnlyAuthorMixin, UpdateView):
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
 
     def get_success_url(self):
-        return reverse_lazy('blog:post_detail', kwargs={'id': self.object.id})
+        return reverse_lazy(
+            'blog:post_detail', kwargs={'id': self.object.id}
+        )
 
 
-class PostDeleteView(LoginRequiredMixin, OnlyAuthorMixin, DeleteView):
+class PostDeleteView(OnlyAuthorMixin, DeleteView):
     model = Post
     pk_url_kwarg = 'post_id'
     template_name = 'blog/create.html'
