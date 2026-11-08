@@ -2,7 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from .models import Post, Category, User
 from .forms import ProfileEditForm, PostForm, CommentForm
 from django.core.paginator import Paginator
-from django.views.generic import CreateView, UpdateView, DeleteView, DetailView
+from django.views.generic import CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import (
     LoginRequiredMixin,
@@ -11,9 +11,10 @@ from django.contrib.auth.mixins import (
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.http import Http404
+from django.utils import timezone
 
 
-POSTS_LIMIT = 5
+POSTS_BY_PAGE = 10
 
 
 class OnlyAuthorMixin(UserPassesTestMixin):
@@ -23,37 +24,37 @@ class OnlyAuthorMixin(UserPassesTestMixin):
         return object.author == self.request.user
 
 
+# ----------Правила показа публикаций (Шаг 3). Начало----------
+
+
 def index(request):
     # Выводит на главную страницу список публикаций
 
     template_name = 'blog/index.html'
-
-    post_list = (
-        Post.objects.published()
-        .select_related('category')
-        [:POSTS_LIMIT]
-    )
-
-    context = {'post_list': post_list}
-    return render(request, template_name, context)
+    post_list = Post.objects.for_feed()
+    paginator = Paginator(post_list, POSTS_BY_PAGE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, template_name, {'page_obj': page_obj})
 
 
 def post_detail(request, id):
     # Выводит отдельую страницу публикации
 
     template_name = 'blog/detail.html'
-
     post = get_object_or_404(
-        Post.objects.select_related('category', 'location', 'author'),
+        Post.objects.with_comments_count().with_related(),
         pk=id,
     )
-
     is_author = request.user.is_authenticated and post.author == request.user
-    if not is_author and not post.is_published:
-        raise Http404
+    if not is_author:
+        if (
+            not post.is_published
+            or not post.category.is_published
+            or post.pub_date > timezone.now()
+        ):
+            raise Http404
 
     comments = post.comments.select_related('author').order_by('created_at')
-
     context = {
         'post': post,
         'comments': comments,
@@ -66,22 +67,19 @@ def category_posts(request, category_slug):
     # Выводит список публикаций по категориям
 
     template_name = 'blog/category.html'
-
     category = get_object_or_404(
         Category,
         slug=category_slug,
-        is_published=True
+        is_published=True,
     )
-
-    post_list = Post.objects.published().filter(
-        category__slug=category_slug
-    ).select_related('category')
-
-    context = {
-        'category': category,
-        'post_list': post_list,
-    }
+    post_list = Post.objects.for_feed().filter(category=category)
+    paginator = Paginator(post_list, POSTS_BY_PAGE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    context = {'category': category, 'page_obj': page_obj}
     return render(request, template_name, context)
+
+
+# ----------Правила показа публикаций (Шаг 3). Конец----------
 
 
 # ----------Профиль (Шаг 1). Начало----------
@@ -91,14 +89,15 @@ def profile_user(request, username_slug):
 
     template_name = 'blog/profile.html'
     profile = get_object_or_404(User, username=username_slug)
-    posts = profile.posts.select_related('category', 'location', 'author')
-    paginator = Paginator(posts, POSTS_LIMIT)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    context = {
-        'profile': profile,
-        'page_obj': page_obj,
-    }
+
+    if request.user == profile:
+        post_list = Post.objects.for_author(profile)
+    else:
+        post_list = Post.objects.for_feed().filter(author=profile)
+
+    paginator = Paginator(post_list, POSTS_BY_PAGE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    context = {'profile': profile, 'page_obj': page_obj}
     return render(request, template_name, context)
 
 

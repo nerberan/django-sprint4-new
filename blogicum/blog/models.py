@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.db.models import Count
 from django.conf import settings
 
 
@@ -21,18 +22,35 @@ class PostQuerySet(models.QuerySet):
             category__is_published=True
         )
 
+    def with_comments_count(self):
+        """Счётчик комментариев на уровне БД (без N+1)"""
+        return self.annotate(comment_count=Count('comments'))
 
-class PostManager(models.Manager):
-    """
-    Здесь происходить связь модели Post.objects с БД через get_queryset
-    и вызов самого запроса published
-    """
+    def with_related(self):
+        """Подтягивает автора, категорию и местоположение одним JOIN."""
+        return self.select_related('author', 'category', 'location')
 
-    def get_queryset(self):
-        return PostQuerySet(self.model, using=self._db)
+    def ordered(self):
+        """От новых к старым."""
+        return self.order_by('-pub_date')
 
-    def published(self):
-        return self.get_queryset().published()
+    def for_feed(self):
+        """Готовый набор для главной/категории/чужого профиля"""
+        return (
+            self.published()
+            .with_comments_count()
+            .with_related()
+            .ordered()
+        )
+
+    def for_author(self, user):
+        """Все посты автора без фильтра published()"""
+        return (
+            self.filter(author=user)
+            .with_comments_count()
+            .with_related()
+            .ordered()
+        )
 
 
 class BaseModel(models.Model):
@@ -90,8 +108,7 @@ class Post(BaseModel):
         blank=True,
     )
 
-    # Подключается PostManager
-    objects = PostManager()
+    objects = PostQuerySet.as_manager()
 
     class Meta:
         verbose_name = 'публикация'
