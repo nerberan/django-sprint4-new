@@ -22,6 +22,11 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 
+handler404 = 'pages.views.page_not_found'
+handler403 = 'pages.views.permission_denied'
+handler500 = 'pages.views.server_error'
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('blog.urls')),
