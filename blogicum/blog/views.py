@@ -143,14 +143,21 @@ class PostUpdateView(OnlyAuthorMixin, LoginRequiredMixin, UpdateView):
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
-    pk_url_kwarg = 'id'
+    pk_url_kwarg = 'post_id'
 
     def get_success_url(self):
         return reverse_lazy('blog:post_detail', kwargs={'id': self.object.id})
 
 
-class PostDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
+class PostDeleteView(LoginRequiredMixin, OnlyAuthorMixin, DeleteView):
     model = Post
+    pk_url_kwarg = 'post_id'
+    template_name = 'blog/create.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = PostForm(instance=self.object)
+        return context
 
     def get_success_url(self):
         return reverse_lazy(
