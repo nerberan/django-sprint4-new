@@ -3,9 +3,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Count
 from django.conf import settings
+from core.constants import STR_LENGTH
 
 
-STR_LENGTH = 256
 User = get_user_model()
 
 
@@ -53,7 +53,17 @@ class PostQuerySet(models.QuerySet):
         )
 
 
-class BaseModel(models.Model):
+class CreatedModel(models.Model):
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Добавлено',)
+
+    class Meta:
+        abstract = True
+
+
+class BaseModel(CreatedModel):
     """
     Абстрактная модель.
     Добавляет к модели атрибуты Опубликовано и Добавлено.
@@ -64,9 +74,6 @@ class BaseModel(models.Model):
         verbose_name='Опубликовано',
         help_text='Снимите галочку, чтобы скрыть публикацию.',
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Добавлено',)
 
     class Meta:
         abstract = True
@@ -153,7 +160,7 @@ class Location(BaseModel):
         return self.name
 
 
-class Comment(BaseModel):
+class Comment(CreatedModel):
     text = models.TextField(verbose_name='Текст')
     post = models.ForeignKey(
         Post,
@@ -165,7 +172,6 @@ class Comment(BaseModel):
         on_delete=models.CASCADE,
         related_name='comments',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['created_at']
