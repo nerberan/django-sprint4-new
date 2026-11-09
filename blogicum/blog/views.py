@@ -1,21 +1,21 @@
-from django.shortcuts import render, get_object_or_404, redirect
-from .models import Post, Category, User, Comment
-from .forms import ProfileEditForm, PostForm, CommentForm
-from django.core.paginator import Paginator
-from django.views.generic import CreateView, UpdateView, DeleteView
-from django.urls import reverse_lazy
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import (
     LoginRequiredMixin,
     UserPassesTestMixin,
 )
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
-from django.http import Http404
-from django.utils import timezone
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.http import Http404
+from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+from django.views.generic import CreateView, UpdateView, DeleteView
 
+from core.constants import POSTS_BY_PAGE
 
-POSTS_BY_PAGE = 10
+from .forms import ProfileEditForm, PostForm, CommentForm
+from .models import Post, Category, User, Comment
 
 
 class OnlyAuthorMixin(UserPassesTestMixin):
@@ -41,7 +41,9 @@ def get_comment_or_404(post_id, comment_id):
     )
 
 
-# ----------Правила показа публикаций (Шаг 3). Начало----------
+def paginate(queryset, page_number):
+    paginator = Paginator(queryset, POSTS_BY_PAGE)
+    return paginator.get_page(page_number)
 
 
 def index(request):
@@ -49,8 +51,7 @@ def index(request):
 
     template_name = 'blog/index.html'
     post_list = Post.objects.for_feed()
-    paginator = Paginator(post_list, POSTS_BY_PAGE)
-    page_obj = paginator.get_page(request.GET.get('page'))
+    page_obj = paginate(post_list, request.GET.get('page'))
     return render(request, template_name, {'page_obj': page_obj})
 
 
@@ -90,16 +91,9 @@ def category_posts(request, category_slug):
         is_published=True,
     )
     post_list = Post.objects.for_feed().filter(category=category)
-    paginator = Paginator(post_list, POSTS_BY_PAGE)
-    page_obj = paginator.get_page(request.GET.get('page'))
+    page_obj = paginate(post_list, request.GET.get('page'))
     context = {'category': category, 'page_obj': page_obj}
     return render(request, template_name, context)
-
-
-# ----------Правила показа публикаций (Шаг 3). Конец----------
-
-
-# ----------Профиль (Шаг 1). Начало----------
 
 
 def profile_user(request, username_slug):
@@ -112,8 +106,7 @@ def profile_user(request, username_slug):
     else:
         post_list = Post.objects.for_feed().filter(author=profile)
 
-    paginator = Paginator(post_list, POSTS_BY_PAGE)
-    page_obj = paginator.get_page(request.GET.get('page'))
+    page_obj = paginate(post_list, request.GET.get('page'))
     context = {'profile': profile, 'page_obj': page_obj}
     return render(request, template_name, context)
 
@@ -127,16 +120,10 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         return self.request.user
 
     def get_success_url(self):
-        return reverse_lazy(
+        return reverse(
             'blog:profile',
             kwargs={'username_slug': self.request.user.username}
         )
-
-
-# ----------Профиль (Шаг 1). Конец----------
-
-
-# ----------Публикации (Шаг 2). Начало----------
 
 
 class PostCreateView(LoginRequiredMixin, CreateView):
@@ -149,7 +136,7 @@ class PostCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy(
+        return reverse(
             'blog:profile',
             kwargs={'username_slug': self.request.user.username}
         )
@@ -162,7 +149,7 @@ class PostUpdateView(OnlyAuthorMixin, UpdateView):
     pk_url_kwarg = 'post_id'
 
     def get_success_url(self):
-        return reverse_lazy(
+        return reverse(
             'blog:post_detail', kwargs={'id': self.object.id}
         )
 
@@ -178,16 +165,10 @@ class PostDeleteView(OnlyAuthorMixin, DeleteView):
         return context
 
     def get_success_url(self):
-        return reverse_lazy(
+        return reverse(
             'blog:profile',
             kwargs={'username_slug': self.request.user.username}
         )
-
-
-# ----------Публикации (Шаг 2). Конец----------
-
-
-# ----------Коментарии (Шаг 4). Начало----------
 
 
 @login_required
@@ -245,6 +226,3 @@ def delete_comment(request, post_id, comment_id):
 
     context = {'comment': comment}
     return render(request, template_name, context)
-
-
-# ----------Коментарии (Шаг 4). Конец----------
