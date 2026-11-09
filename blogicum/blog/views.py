@@ -29,7 +29,7 @@ class OnlyAuthorMixin(UserPassesTestMixin):
 
     def handle_no_permission(self):
         obj = self.get_object()
-        return redirect('blog:post_detail', id=obj.id)
+        return redirect('blog:post_detail', post_id=obj.id)
 
 
 def get_comment_or_404(post_id, comment_id):
@@ -55,13 +55,13 @@ def index(request):
     return render(request, template_name, {'page_obj': page_obj})
 
 
-def post_detail(request, id):
+def post_detail(request, post_id):
     # Выводит отдельую страницу публикации
 
     template_name = 'blog/detail.html'
     post = get_object_or_404(
         Post.objects.with_comments_count().with_related(),
-        pk=id,
+        pk=post_id,
     )
     is_author = request.user.is_authenticated and post.author == request.user
     if not is_author:
@@ -150,7 +150,7 @@ class PostUpdateView(OnlyAuthorMixin, UpdateView):
 
     def get_success_url(self):
         return reverse(
-            'blog:post_detail', kwargs={'id': self.object.id}
+            'blog:post_detail', kwargs={'post_id': self.object.id}
         )
 
 
@@ -184,7 +184,7 @@ def add_comment(request, post_id):
         comment.author = request.user
         comment.post = post
         comment.save()
-        return redirect('blog:post_detail', id=post.id)
+        return redirect('blog:post_detail', post_id=post.id)
 
     comments = post.comments.select_related('author').order_by('created_at')
     context = {
@@ -206,7 +206,7 @@ def edit_comment(request, post_id, comment_id):
     form = CommentForm(request.POST or None, instance=comment)
     if form.is_valid():
         form.save()
-        return redirect('blog:post_detail', id=post_id)
+        return redirect('blog:post_detail', post_id=post_id)
 
     context = {'form': form, 'comment': comment}
     return render(request, template_name, context)
@@ -222,7 +222,7 @@ def delete_comment(request, post_id, comment_id):
 
     if request.method == 'POST':
         comment.delete()
-        return redirect('blog:post_detail', id=post_id)
+        return redirect('blog:post_detail', post_id=post_id)
 
     context = {'comment': comment}
     return render(request, template_name, context)
